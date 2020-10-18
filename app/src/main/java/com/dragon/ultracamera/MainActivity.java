@@ -1,5 +1,17 @@
 package com.dragon.ultracamera;
 
+import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
+import android.view.View;
+import android.widget.SeekBar;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.Camera;
@@ -17,21 +29,10 @@ import androidx.camera.core.ZoomState;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
-import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LiveData;
-import android.content.pm.PackageManager;
-import android.net.Uri;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Environment;
-import android.os.Handler;
-import android.util.Log;
-import android.view.MotionEvent;
-import android.view.ScaleGestureDetector;
-import android.view.View;
-import android.widget.SeekBar;
-import android.widget.Toast;
+
 import com.google.common.util.concurrent.ListenableFuture;
+
 import java.io.File;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -67,22 +68,25 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        getSupportActionBar().hide();
-        zoomBar = (SeekBar) findViewById(R.id.zoomBar);
+        try {
+            getSupportActionBar().hide();
+        } catch (NullPointerException e) {
+
+        }
+        zoomBar = findViewById(R.id.zoomBar);
         zoomBar.setMax(100);
         zoomBar.setProgress(0);
-        focusView = (View) findViewById(R.id.focus);
+        focusView = findViewById(R.id.focus);
         //Request Camera permission
-        if(allPermissionsGranted()){
+        if (allPermissionsGranted()) {
             startCamera();
-        }else{
-            requestPermissions(REQUIRED_PERMISSIONS,ASK_MULTIPLE_PERMISSION_REQUEST_CODE);
+        } else {
+            requestPermissions(REQUIRED_PERMISSIONS, ASK_MULTIPLE_PERMISSION_REQUEST_CODE);
         }
-        findViewById(R.id.camera_capture_button).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                takePhoto();
-            }
+        findViewById(R.id.camera_capture_button).setOnClickListener(v -> {
+            TakePhoto takePhoto = new TakePhoto();
+            Runnable takingPhoto = () -> takePhoto.execute();
+            handler.postAtFrontOfQueue(takingPhoto);
         });
 
 
@@ -90,24 +94,51 @@ public class MainActivity extends AppCompatActivity {
         cameraExecutor = Executors.newSingleThreadExecutor();
 
     }
+// Enable to use normal take photo instead of asyncTask
+//    private void takePhotos() {
+//        handler.removeCallbacks(newRunnable);
+//        handler.removeCallbacks(newRunnable1);
+//        focusView.setVisibility(View.INVISIBLE);
+//        File photoFile = new File(outputDirectory, "Image_"+System.currentTimeMillis()+".jpg");
+//
+//        ImageCapture.OutputFileOptions outputFileOptions = new ImageCapture.OutputFileOptions.Builder(photoFile).build();
+//
+//        imageCapture.takePicture(outputFileOptions, ContextCompat.getMainExecutor(getBaseContext()), new ImageCapture.OnImageSavedCallback() {
+//            @Override
+//            public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
+//                Uri.fromFile(photoFile);
+//                Toast.makeText(getBaseContext(),"Image Saved"+ photoFile.getAbsolutePath(),Toast.LENGTH_SHORT).show();
+//            }
+//
+//            @Override
+//            public void onError(@NonNull ImageCaptureException exception) {
+//                Toast.makeText(getBaseContext(),"Error Saving Image"+photoFile.getAbsolutePath(),Toast.LENGTH_SHORT).show();
+//            }
+//        });
+//    }
 
     private void pinchToZoom() {
         //Pinch Zoom Camera
-        Object listener = new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        ScaleGestureDetector.SimpleOnScaleGestureListener listener = new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
                 LiveData<ZoomState> ZoomRatio = cInfo.getZoomState();
-                float currentZoomRatio = ZoomRatio.getValue().getZoomRatio();
+                float currentZoomRatio = 0;
+                try {
+                    currentZoomRatio = ZoomRatio.getValue().getZoomRatio();
+                } catch (NullPointerException e) {
+
+                }
                 float linearValue = ZoomRatio.getValue().getLinearZoom();
                 float delta = detector.getScaleFactor();
                 cControl.setZoomRatio(currentZoomRatio * delta);
-                float mat = (float) (linearValue-0)*(100-0)/(1-0)+0;
+                float mat = (linearValue) * (100);
                 zoomBar.setProgress((int) mat);
                 return true;
             }
         };
 
-        scaleGestureDetector = new ScaleGestureDetector(getBaseContext(), (ScaleGestureDetector.SimpleOnScaleGestureListener) listener);
+        scaleGestureDetector = new ScaleGestureDetector(getBaseContext(), listener);
     }
 
 
@@ -117,8 +148,8 @@ public class MainActivity extends AppCompatActivity {
         zoomBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                float mat = (float) (progress-0)*(1-0)/(100-0)+0;
-                cControl.setLinearZoom((float)mat);
+                float mat = (float) (progress) / (100);
+                cControl.setLinearZoom(mat);
             }
 
             @Override
@@ -149,24 +180,7 @@ public class MainActivity extends AppCompatActivity {
         cameraExecutor.shutdown();
     }
 
-    private void takePhoto() {
-        File photoFile = new File(outputDirectory, "Image_"+System.currentTimeMillis()+".jpg");
 
-        ImageCapture.OutputFileOptions outputFileOptions = new ImageCapture.OutputFileOptions.Builder(photoFile).build();
-
-        imageCapture.takePicture(outputFileOptions, ContextCompat.getMainExecutor(this), new ImageCapture.OnImageSavedCallback() {
-            @Override
-            public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
-                Uri.fromFile(photoFile);
-                Toast.makeText(getBaseContext(),"Image Saved"+ photoFile.getAbsolutePath(),Toast.LENGTH_SHORT).show();
-            }
-
-            @Override
-            public void onError(@NonNull ImageCaptureException exception) {
-                Toast.makeText(getBaseContext(),"Error Saving Image"+photoFile.getAbsolutePath(),Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
 
     private void startCamera() {
         ListenableFuture<ProcessCameraProvider> cameraProviderFuture = ProcessCameraProvider.getInstance(this);
@@ -178,42 +192,37 @@ public class MainActivity extends AppCompatActivity {
                 Preview preview = new Preview.Builder().build();
                 imageCapture = new ImageCapture.Builder().build();
                 CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
-                PreviewView viewFinder = (PreviewView) findViewById(R.id.viewFinder1);
+                PreviewView viewFinder = findViewById(R.id.viewFinder1);
 
                 Preview.SurfaceProvider surfaceProvider = viewFinder.getSurfaceProvider();
                 preview.setSurfaceProvider(surfaceProvider);
 
-                try{
+                try {
                     cameraProvider.unbindAll();
-                    Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner) this, cameraSelector, preview, imageCapture);
+                    Camera camera = cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture);
                     cControl = camera.getCameraControl();
                     cInfo = camera.getCameraInfo();
 
                     //AutoFocus CameraX
-                    viewFinder.setOnTouchListener(new View.OnTouchListener() {
-                        @Override
-                        public boolean onTouch(View v, MotionEvent event) {
-                            if(event.getAction() == MotionEvent.ACTION_DOWN){
-                                handler.removeCallbacks(newRunnable);
-                                handler.removeCallbacks(newRunnable1);
-                                focusView.setVisibility(View.INVISIBLE);
-                                return true;
-                            }
-                            else if(event.getAction() == MotionEvent.ACTION_UP){
-                                MeteringPointFactory factory = new SurfaceOrientedMeteringPointFactory(viewFinder.getWidth(),viewFinder.getHeight());
-                                MeteringPoint autoFocusPoint = factory.createPoint(event.getX(), event.getY());
-                                cControl.startFocusAndMetering(new FocusMeteringAction.Builder(autoFocusPoint,FocusMeteringAction.FLAG_AF).build());
-                                focusView.setBackground(ContextCompat.getDrawable(getBaseContext(),R.drawable.ic_focus));
-                                focusView.setVisibility(View.VISIBLE);
-                                handler.postDelayed(newRunnable,2000);
-                                handler.postDelayed(newRunnable1,4000);
-                                return true;
-                            }else{
+                    viewFinder.setOnTouchListener((v, event) -> {
+                        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                            handler.removeCallbacks(newRunnable);
+                            handler.removeCallbacks(newRunnable1);
+                            focusView.setVisibility(View.INVISIBLE);
+                            return true;
+                        } else if (event.getAction() == MotionEvent.ACTION_UP) {
+                            MeteringPointFactory factory = new SurfaceOrientedMeteringPointFactory(viewFinder.getWidth(), viewFinder.getHeight());
+                            MeteringPoint autoFocusPoint = factory.createPoint(event.getX(), event.getY());
+                            cControl.startFocusAndMetering(new FocusMeteringAction.Builder(autoFocusPoint, FocusMeteringAction.FLAG_AF).build());
+                            focusView.setBackground(ContextCompat.getDrawable(getBaseContext(), R.drawable.ic_focus));
+                            focusView.setVisibility(View.VISIBLE);
+                            handler.postDelayed(newRunnable, 2000);
+                            handler.postDelayed(newRunnable1, 4000);
+                            return true;
+                        } else {
 
-                                return false;
-                            }
+                            return false;
                         }
-
                     });
 
 
@@ -239,10 +248,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         scaleGestureDetector.onTouchEvent(event);
         return super.onTouchEvent(event);
     }
+
+    private class TakePhoto extends AsyncTask<String, String, String> {
+
+        @Override
+        protected String doInBackground(String... strings) {
+            File photoFile = new File(outputDirectory, "Image_" + System.currentTimeMillis() + ".jpg");
+
+            ImageCapture.OutputFileOptions outputFileOptions = new ImageCapture.OutputFileOptions.Builder(photoFile).build();
+
+            imageCapture.takePicture(outputFileOptions, ContextCompat.getMainExecutor(getBaseContext()), new ImageCapture.OnImageSavedCallback() {
+                @Override
+                public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
+                    Uri.fromFile(photoFile);
+                    Toast.makeText(getBaseContext(), "Image Saved" + photoFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onError(@NonNull ImageCaptureException exception) {
+                    Toast.makeText(getBaseContext(), "Error Saving Image" + photoFile.getAbsolutePath(), Toast.LENGTH_SHORT).show();
+                }
+            });
+            return null;
+        }
+    }
+
 }
