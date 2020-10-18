@@ -2,13 +2,10 @@ package com.dragon.ultracamera;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraControl;
 import androidx.camera.core.CameraInfo;
-
 import androidx.camera.core.CameraSelector;
-
 import androidx.camera.core.FocusMeteringAction;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
@@ -16,33 +13,26 @@ import androidx.camera.core.MeteringPoint;
 import androidx.camera.core.MeteringPointFactory;
 import androidx.camera.core.Preview;
 import androidx.camera.core.SurfaceOrientedMeteringPointFactory;
-
 import androidx.camera.core.ZoomState;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
-
 import androidx.core.content.ContextCompat;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LiveData;
-
-
 import android.content.pm.PackageManager;
-
 import android.net.Uri;
-
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-
+import android.os.Handler;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
-
 import android.view.View;
+import android.widget.SeekBar;
 import android.widget.Toast;
-
 import com.google.common.util.concurrent.ListenableFuture;
-
 import java.io.File;
-
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -58,11 +48,30 @@ public class MainActivity extends AppCompatActivity {
     public CameraControl cControl;
     public CameraInfo cInfo;
     public ScaleGestureDetector scaleGestureDetector;
+    private SeekBar zoomBar;
+    private View focusView;
+    private Handler handler = new Handler();
+    private Runnable newRunnable = new Runnable() {
+        @Override
+        public void run() {
+            focusView.setBackground(ContextCompat.getDrawable(getBaseContext(),R.drawable.ic_focus_green));
+        }
+    };
+    private Runnable newRunnable1 = new Runnable() {
+        @Override
+        public void run() {
+            focusView.setVisibility(View.INVISIBLE);
+        }
+    };
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         getSupportActionBar().hide();
+        zoomBar = (SeekBar) findViewById(R.id.zoomBar);
+        zoomBar.setMax(100);
+        zoomBar.setProgress(0);
+        focusView = (View) findViewById(R.id.focus);
         //Request Camera permission
         if(allPermissionsGranted()){
             startCamera();
@@ -89,13 +98,39 @@ public class MainActivity extends AppCompatActivity {
             public boolean onScale(ScaleGestureDetector detector) {
                 LiveData<ZoomState> ZoomRatio = cInfo.getZoomState();
                 float currentZoomRatio = ZoomRatio.getValue().getZoomRatio();
+                float linearValue = ZoomRatio.getValue().getLinearZoom();
                 float delta = detector.getScaleFactor();
                 cControl.setZoomRatio(currentZoomRatio * delta);
+                float mat = (float) (linearValue-0)*(100-0)/(1-0)+0;
+                zoomBar.setProgress((int) mat);
                 return true;
             }
         };
 
         scaleGestureDetector = new ScaleGestureDetector(getBaseContext(), (ScaleGestureDetector.SimpleOnScaleGestureListener) listener);
+    }
+
+
+
+
+    private void setUpZoomSlider(){
+        zoomBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                float mat = (float) (progress-0)*(1-0)/(100-0)+0;
+                cControl.setLinearZoom((float)mat);
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
     }
 
 
@@ -154,19 +189,27 @@ public class MainActivity extends AppCompatActivity {
                     cControl = camera.getCameraControl();
                     cInfo = camera.getCameraInfo();
 
-                    //AutoFocus Camera X
+                    //AutoFocus CameraX
                     viewFinder.setOnTouchListener(new View.OnTouchListener() {
                         @Override
                         public boolean onTouch(View v, MotionEvent event) {
                             if(event.getAction() == MotionEvent.ACTION_DOWN){
+                                handler.removeCallbacks(newRunnable);
+                                handler.removeCallbacks(newRunnable1);
+                                focusView.setVisibility(View.INVISIBLE);
                                 return true;
                             }
                             else if(event.getAction() == MotionEvent.ACTION_UP){
                                 MeteringPointFactory factory = new SurfaceOrientedMeteringPointFactory(viewFinder.getWidth(),viewFinder.getHeight());
                                 MeteringPoint autoFocusPoint = factory.createPoint(event.getX(), event.getY());
                                 cControl.startFocusAndMetering(new FocusMeteringAction.Builder(autoFocusPoint,FocusMeteringAction.FLAG_AF).build());
+                                focusView.setBackground(ContextCompat.getDrawable(getBaseContext(),R.drawable.ic_focus));
+                                focusView.setVisibility(View.VISIBLE);
+                                handler.postDelayed(newRunnable,2000);
+                                handler.postDelayed(newRunnable1,4000);
                                 return true;
                             }else{
+
                                 return false;
                             }
                         }
@@ -178,6 +221,7 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this,"Failed",Toast.LENGTH_SHORT).show();
                 }
                 pinchToZoom();
+                setUpZoomSlider();
             }catch (ExecutionException | InterruptedException e){
 
             }

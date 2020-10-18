@@ -8,16 +8,42 @@
     tools:context=".MainActivity"
     android:orientation="vertical"
     android:layout_weight="10">
-    <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="8">
+        android:layout_weight="8"
+        android:orientation="vertical">
+
+
         <androidx.camera.view.PreviewView
             android:id="@+id/viewFinder1"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
+            android:layout_height="match_parent">
 
-    </LinearLayout>
+        </androidx.camera.view.PreviewView>
+
+        <View
+            android:id="@+id/focus"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:background="@drawable/ic_focus"
+            app:layout_constraintBottom_toTopOf="@+id/zoomBar"
+            app:layout_constraintEnd_toEndOf="@+id/viewFinder1"
+            app:layout_constraintStart_toStartOf="@+id/viewFinder1"
+            app:layout_constraintTop_toTopOf="parent"
+            android:visibility="invisible" />
+
+        <SeekBar
+            android:id="@+id/zoomBar"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_margin="0dp"
+            android:layout_marginBottom="545dp"
+            android:max="100"
+            android:padding="0dp"
+            app:layout_constraintBottom_toBottomOf="@+id/viewFinder1"
+            android:elevation="2dp"/>
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <RelativeLayout
         android:layout_width="match_parent"
